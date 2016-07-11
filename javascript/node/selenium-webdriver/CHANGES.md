@@ -1,3 +1,112 @@
+## v3.0.0-dev
+
+* Allow users to set the agent used for HTTP connections through
+   `builder.Builder#usingHttpAgent()`
+* Added new wait conditions: `until.urlIs()`, `until.urlContains()`,
+   `until.urlMatches()`
+* Added work around for [GeckoDriver bug](https://bugzilla.mozilla.org/show_bug.cgi?id=1274924)
+   raising a type conversion error
+* Internal cleanup replacing uses of managed promises with native promises
+* Removed the mandatory use of Firefox Dev Edition, when using Marionette driver
+* Fixed timeouts' URL
+* Properly send HTTP requests when using a WebDriver server proxy
+* Properly configure proxies when using the geckodriver
+
+### API Changes
+
+* `promise.Deferred` is no longer a thenable object.
+* `Options#addCookie()` now takes a record object instead of 7 individual
+  parameters. A TypeError will be thrown if addCookie() is called with invalid
+  arguments.
+* When adding cookies, the desired expiry must be provided as a Date or in
+  _seconds_ since epoch. When retrieving cookies, the expiration is always
+  returned in seconds.
+*  Renamed `firefox.Options#useMarionette` to `firefox.Options#useGeckoDriver`
+* Removed deprecated modules:
+   - `selenium-webdriver/error` (use `selenium-webdriver/lib/error`,\
+     or the `error` property exported by `selenium-webdriver`)
+* Removed deprecated types:
+   - `error.InvalidSessionIdError` (use `error.NoSuchSessionError`)
+   - `executors.DeferredExecutor` (use `command.DeferredExecutor`)
+   - `until.Condition` (use `webdriver.Condition`)
+   - `until.WebElementCondition` (use `webdriver.WebElementCondition`)
+   - `webdriver.UnhandledAlertError` (use `error.UnexpectedAlertOpenError`)
+* Removed deprecated functions:
+   - `Deferred#cancel()`
+   - `Deferred#catch()`
+   - `Deferred#finally()`
+   - `Deferred#isPending()`
+   - `Deferred#then()`
+   - `Promise#thenCatch()`
+   - `Promise#thenFinally()`
+   - `WebDriver#isElementPresent()`
+   - `WebElement#getInnerHtml()`
+   - `WebElement#getOuterHtml()`
+   - `WebElement#getRawId()`
+   - `WebElement#isElementPresent()`
+* Removed deprecated properties:
+   - `WebDriverError#code`
+
+
+## v2.53.2
+
+* Changed `io.exists()` to return a rejected promise if the input path is not
+   a string
+* Deprecated `Promise#thenFinally()` - use `Promise#finally()`. The thenFinally
+   shim added to the promise module in v2.53.0 will be removed in v3.0
+   Sorry for the churn!
+* FIXED: capabilities serialization now properly handles undefined vs.
+   false-like values.
+* FIXED: properly handle responses from the remote end in
+   `WebDriver.attachToSession`
+
+## v2.53.1
+
+* FIXED: for consistency with the other language bindings, `remote.FileDetector`
+    will ignore paths that refer to a directory.
+
+## v2.53.0
+
+### Change Summary
+
+* Added preliminary support for Marionette, Mozilla's WebDriver implementation
+   for Firefox. Marionette may be enabled via the API,
+   `firefox.Options#useMarionette`, or by setting the `SELENIUM_MARIONETTE`
+   environment variable.
+* Moved all logic for parsing and interpreting responses from the remote end
+   into the individual `command.Executor` implementations.
+* For consistency with the other Selenium language bindings,
+   `WebDriver#isElementPresent()` and `WebElement#isElementPresent()` have
+   been deprecated. These methods will be removed in v3.0. Use the findElements
+   command to test for the presence of an element:
+
+      driver.findElements(By.css('.foo')).then(found => !!found.length);
+* Added support for W3C-spec compliant servers.
+* For consistent naming, deprecating `error.InvalidSessionIdError` in favor of
+    `error.NoSuchSessionError`.
+* Moved the `error` module to `lib/error` so all core modules are co-located.
+   The top-level `error` module will be removed in v3.0.
+* Moved `until.Condition` and `until.WebElementCondition` to the webdriver
+   module to break a circular dependency.
+* Added support for setting the username and password in basic auth pop-up
+   dialogs (currently IE only).
+* Deprecated `WebElement#getInnerHtml()` and `WebEleemnt#getOuterHtml()`
+* Deprecated `Promise#thenCatch()` - use `Promise#catch()` instead
+* Deprecated `Promise#thenFinally()` - use `promise.thenFinally()` instead
+* FIXED: `io.findInPath()` will no longer match against directories that have
+   the same basename as the target file.
+* FIXED: `phantomjs.Driver` now takes a third argument that defines the path to
+   a log file to use for the phantomjs executable's output. This may be quickly
+   set at runtime with the `SELENIUM_PHANTOMJS_LOG` environment variable.
+
+### Changes for W3C WebDriver Spec Compliance
+
+* Changed `element.sendKeys(...)` to send the key sequence as an array where
+   each element defines a single key. The legacy wire protocol permits arrays
+   where each element is a string of arbitrary length. This change is solely
+   at the protocol level and should have no user-visible effect.
+
+
 ## v2.52.0
 
 ### Notice

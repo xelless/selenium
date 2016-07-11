@@ -23,6 +23,7 @@ import org.openqa.grid.common.RegistrationRequest;
 import org.openqa.grid.common.exception.GridException;
 import org.openqa.grid.internal.utils.CapabilityMatcher;
 import org.openqa.grid.internal.utils.HtmlRenderer;
+import org.openqa.grid.internal.utils.configuration.GridNodeConfiguration;
 import org.openqa.selenium.remote.internal.HttpClientFactory;
 
 import java.net.URL;
@@ -86,7 +87,7 @@ public interface RemoteProxy extends Comparable<RemoteProxy> {
    *
    * @return the node configuration.
    */
-  Map<String, Object> getConfig();
+  GridNodeConfiguration getConfig();
 
   /**
    * Returns the request sent from the node to the hub to register the proxy.
@@ -191,4 +192,9 @@ public interface RemoteProxy extends Comparable<RemoteProxy> {
    * @return the percentage of the available resource used. Can be greater than 100 if the grid is under heavy load.
    */
   float getResourceUsageInPercent();
+
+  /**
+   * @return the time the latest session was started on a TestSlot, -1 if no sessions were started.
+   */
+  long getLastSessionStart();
 }

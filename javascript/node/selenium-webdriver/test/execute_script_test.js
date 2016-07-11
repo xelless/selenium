@@ -18,6 +18,7 @@
 'use strict';
 
 var path = require('path');
+var fail = require('assert').fail;
 
 var webdriver = require('..'),
     Browser = webdriver.Browser,
@@ -47,7 +48,7 @@ test.suite(function(env) {
     test.it('fails if script throws', function() {
       execute('throw new Error("boom")')
           .then(function() { throw shoudlHaveFailed; })
-          .thenCatch(function(e) {
+          .catch(function(e) {
             // The java WebDriver server adds a bunch of crap to error messages.
             // Error message will just be "JavaScript error" for IE.
             assert(e.message).matches(/.*(JavaScript error|boom).*/);
@@ -57,7 +58,7 @@ test.suite(function(env) {
     test.it('fails if script does not parse', function() {
       execute('throw function\\*')
           .then(function() { throw shoudlHaveFailed; })
-          .thenCatch(function(e) {
+          .catch(function(e) {
             assert(e).notEqualTo(shouldHaveFailed);
           });
     });
@@ -206,7 +207,8 @@ test.suite(function(env) {
         assert(execute('return arguments.length', 1, 'a', false)).equalTo(3);
       });
 
-      test.it('can return arguments object as array', function() {
+      test.ignore(env.browsers(Browser.FIREFOX)).
+      it('can return arguments object as array', function() {
         execute('return arguments', 1, 'a', false).then(function(val) {
           assert(val.length).equalTo(3);
           assert(val[0]).equalTo(1);
@@ -308,6 +310,35 @@ test.suite(function(env) {
       });
     });
 
+    describe('async timeouts', function() {
+      var TIMEOUT_IN_MS = 200;
+      var ACCEPTABLE_WAIT = TIMEOUT_IN_MS / 10;
+      var TOO_LONG_WAIT = TIMEOUT_IN_MS * 10;
+
+      before(function() {
+        return driver.manage().timeouts().setScriptTimeout(TIMEOUT_IN_MS)
+      });
+
+      test.it('does not fail if script execute in time', function() {
+        return executeTimeOutScript(ACCEPTABLE_WAIT);
+      });
+
+      test.it('fails if script took too long', function() {
+        return executeTimeOutScript(TOO_LONG_WAIT)
+          .then(function() {
+            fail('it should have timed out');
+          }).catch(function(e) {
+            assert(e.name).equalTo('ScriptTimeoutError');
+          });
+      });
+
+      function executeTimeOutScript(sleepTime) {
+        return driver.executeAsyncScript(function(sleepTime) {
+          var callback = arguments[arguments.length - 1];
+          setTimeout(callback, sleepTime)
+        }, sleepTime);
+      }
+    })
   });
 
   function verifyJson(expected) {

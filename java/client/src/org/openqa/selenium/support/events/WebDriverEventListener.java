@@ -73,6 +73,21 @@ public interface WebDriverEventListener {
   void afterNavigateForward(WebDriver driver);
 
   /**
+   * Called before {@link org.openqa.selenium.WebDriver.Navigation#refresh navigate().refresh()}.
+   *
+   * @param driver WebDriver
+   */
+  void beforeNavigateRefresh(WebDriver driver);
+
+  /**
+   * Called after {@link org.openqa.selenium.WebDriver.Navigation#refresh navigate().refresh()}. Not called,
+   * if an exception is thrown.
+   *
+   * @param driver WebDriver
+   */
+  void afterNavigateRefresh(WebDriver driver);
+
+  /**
    * Called before {@link WebDriver#findElement WebDriver.findElement(...)}, or
    * {@link WebDriver#findElements WebDriver.findElements(...)}, or {@link WebElement#findElement
    * WebElement.findElement(...)}, or {@link WebElement#findElement WebElement.findElements(...)}.
@@ -118,7 +133,7 @@ public interface WebDriverEventListener {
    * @param driver WebDriver
    * @param element the WebElement being used for the action
    */
-  void beforeChangeValueOf(WebElement element, WebDriver driver);
+  void beforeChangeValueOf(WebElement element, WebDriver driver, CharSequence[] keysToSend);
 
   /**
    * Called after {@link WebElement#clear WebElement.clear()}, {@link WebElement#sendKeys
@@ -127,7 +142,7 @@ public interface WebDriverEventListener {
    * @param driver WebDriver
    * @param element the WebElement being used for the action
    */
-  void afterChangeValueOf(WebElement element, WebDriver driver);
+  void afterChangeValueOf(WebElement element, WebDriver driver, CharSequence[] keysToSend);
 
   /**
    * Called before {@link org.openqa.selenium.remote.RemoteWebDriver#executeScript(java.lang.String, java.lang.Object[]) }

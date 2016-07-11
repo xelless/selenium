@@ -42,6 +42,10 @@ see directories carrying multiple build directive files.
 For reference, crazyfun's build files are named *build.desc*,
 while buck's are named simply *BUCK*.
 
+Before building ensure that you have the 
+[most recent `chromedriver` ](https://sites.google.com/a/chromium.org/chromedriver/downloads)
+available on your `$PATH`.  
+
 To build Selenium, in the same directory as this file:
 
 ```sh
@@ -76,7 +80,7 @@ To list all available targets, you can append the `-T` flag:
 
 Although the plan is to return to a vanilla build of Buck as soon as
 possible, we currently use a fork hosted at
-https://github.com/shs96c/buck To build using Buck, first clone that
+https://github.com/SeleniumHQ/buck To build using Buck, first clone that
 repo and build using ant. Then add Buck's "bin" directory to your
 PATH.
 
@@ -239,11 +243,6 @@ can run all the javascript tests using:
 
 ## Maven POM files
 
-Ignore the [Maven](http://maven.apache.org/) POM file present in the
-same directory. It is only used for releasing to jars to Maven
-Repository (public or local), and is not considered the main build
-mechanism.
-
 Here is the [public Selenium Maven
 repository](http://repo1.maven.org/maven2/org/seleniumhq/selenium/).
 
@@ -286,7 +285,7 @@ targets.
 ## Maven _per se_
 
 If it is not clear already, Selenium is not built with Maven, it is
-built with [Crazy-Fun](https://github.com/SeleniumHQ/selenium/wiki/Crazy-Fun-Build) 
+built with [Buck](https://github.com/SeleniumHQ/buck), 
 though that is invoked with *go* as outlined above so you do not really 
 have to learn too much about that.
 
@@ -298,13 +297,18 @@ and deploy into you local maven repository (`~/.m2/repository`), while
 skipping Selenium's own tests.
 
 ```sh
-./go release
-cd maven
-mvn clean install
+./go maven-install
+```
+
+The maven jars should now be in your local ~/.m2/repository. You can also publish
+directly using Buck:
+
+```sh
+buck publish -r your-repo //java/client/src/org/openqa/selenium:selenium
 ```
 
 This sequence will push some seven or so jars into your local Maven
-repository with something like 'selenium-server-2.0-SNAPSHOT.jar' as
+repository with something like 'selenium-server-3.0.0.jar' as
 the name.
 
 ## Useful Resources

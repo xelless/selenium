@@ -22,7 +22,7 @@ import org.openqa.grid.common.SeleniumProtocol;
 import org.openqa.grid.common.exception.GridException;
 import org.openqa.grid.internal.listeners.TestSessionListener;
 import org.openqa.grid.internal.utils.CapabilityMatcher;
-import org.openqa.grid.internal.utils.GridHubConfiguration;
+import org.openqa.grid.internal.utils.configuration.GridHubConfiguration;
 
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -61,6 +61,7 @@ public class TestSlot {
   private volatile TestSession currentSession;
   volatile boolean beingReleased = false;
   private boolean showWarning = false;
+  private long lastSessionStart = -1;
 
 
   public TestSlot(RemoteProxy proxy, SeleniumProtocol protocol, String path,
@@ -105,16 +106,15 @@ public class TestSlot {
       lock.lock();
       if (currentSession != null) {
         return null;
-      } else {
-        if (matches(desiredCapabilities)) {
-          log.info("Trying to create a new session on test slot " + this.capabilities);
-          TestSession session = new TestSession(this, desiredCapabilities, new DefaultTimeSource());
-          currentSession = session;
-          return session;
-        } else {
-          return null;
-        }
       }
+      if (matches(desiredCapabilities)) {
+        log.info("Trying to create a new session on test slot " + this.capabilities);
+        TestSession session = new TestSession(this, desiredCapabilities, new DefaultTimeSource());
+        currentSession = session;
+        lastSessionStart = System.currentTimeMillis();
+        return session;
+      }
+      return null;
     } finally {
       lock.unlock();
     }
@@ -180,10 +180,9 @@ public class TestSlot {
       lock.lock();
       if (beingReleased) {
         return false;
-      } else {
-        beingReleased = true;
-        return true;
       }
+      beingReleased = true;
+      return true;
     } finally {
       lock.unlock();
     }
@@ -246,5 +245,12 @@ public class TestSlot {
     } catch (MalformedURLException e) {
       throw new GridException("Configuration error for the node." + u + " isn't a valid URL");
     }
+  }
+
+  /**
+   * @return System.currentTimeMillis() of when the session was started, otherwise -1
+   */
+  public long getLastSessionStart() {
+    return lastSessionStart;
   }
 }

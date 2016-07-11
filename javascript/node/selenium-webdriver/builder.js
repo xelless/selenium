@@ -27,6 +27,7 @@ const webdriver = require('./lib/webdriver');
 const promise = require('./lib/promise');
 const opera = require('./opera');
 const phantomjs = require('./phantomjs');
+const remote = require('./remote');
 const safari = require('./safari');
 
 const Browser = capabilities.Browser;
@@ -41,14 +42,11 @@ var seleniumServer;
 /**
  * Starts an instance of the Selenium server if not yet running.
  * @param {string} jar Path to the server jar to use.
- * @return {!promise.Promise<string>} A promise for the server's
+ * @return {!Promise<string>} A promise for the server's
  *     addrss once started.
  */
 function startSeleniumServer(jar) {
   if (!seleniumServer) {
-    // Requiring 'chrome' above would create a cycle:
-    // index -> builder -> chrome -> index
-    var remote = require('./remote');
     seleniumServer = new remote.SeleniumServer(jar);
   }
   return seleniumServer.start();
@@ -128,6 +126,9 @@ class Builder {
 
     /** @private {boolean} */
     this.ignoreEnv_ = false;
+
+    /** @private {http.Agent} */
+    this.agent_ = null;
   }
 
   /**
@@ -185,6 +186,25 @@ class Builder {
    */
   getWebDriverProxy() {
     return this.proxy_;
+  }
+
+  /**
+   * Sets the http agent to use for each request.
+   * If this method is not called, the Builder will use http.globalAgent by default.
+   *
+   * @param {http.Agent} agent The agent to use for each request.
+   * @return {!Builder} A self reference.
+   */
+  usingHttpAgent(agent) {
+    this.agent_ = agent;
+    return this;
+  }
+
+  /**
+   * @return {http.Agent} The http agent used for each request
+   */
+  getHttpAgent() {
+    return this.agent_;
   }
 
   /**
@@ -315,6 +335,14 @@ class Builder {
   setFirefoxOptions(options) {
     this.firefoxOptions_ = options;
     return this;
+  }
+
+  /**
+   * @return {firefox.Options} the Firefox specific options currently configured
+   *     for this instance.
+   */
+  getFirefoxOptions() {
+    return this.firefoxOptions_;
   }
 
   /**
@@ -454,7 +482,7 @@ class Builder {
     }
 
     if (url) {
-      var executor = executors.createExecutor(url, this.proxy_);
+      var executor = executors.createExecutor(url, this.agent_, this.proxy_);
       return WebDriver.createSession(executor, capabilities, this.flow_);
     }
 

@@ -9,6 +9,78 @@ available via the project downloads page. Changes in "revision" field indicate
 private releases checked into the prebuilts directory of the source tree, but
 not made generally available on the downloads page.
 
+v2.53.1.0
+=========
+ * Updates to JavaScript automation atoms, including update to wgxpath.
+ * IE driver no longer returns proxy capability unless a proxy is requested.
+
+v2.53.0.1
+=========
+ * Modified wait algorithm to respect page load strategy for 
+   IWebBrowser2::ReadyState. Prior to this commit, the driver would only
+   respect the page load strategy for document.readyState, not for the
+   browser COM object. This means that, for example, when IE has an info
+   bar being displayed (like when downloading a file), the driver will wait
+   indefinitely, since the IWebBrowser2 object's ReadyState property will
+   never cycle over to "complete," topping out at "interactive." Fixes issues
+   #999 and #1843.
+
+v2.53.0.0
+=========
+ * Release to synchronize with release of Selenium project.
+ * (on behalf of Nathan Isom) Fixed spelling in IE driver registry path 
+   for use in error messages.
+
+v2.52.2.0
+=========
+ * Updated IE driver to not error on findElements JavaScript atom errors.
+   Hitting a JavaScript error with the atom is an unrecoverable error. The
+   most common case of this for IE is when there is a page refresh,
+   navigation, or similar, and the driver is polling for element presence.
+   The calling code can't do anything about it, so we might as well just log
+   and return success with an empty list. This was fixed in 2.52.1 for the
+   "find single element" case, but was not completely fixed for the "find
+   multiple elements" case. As before, this is an extreme hack, and has the
+   potential to be masking a very serious problem in the driver.
+
+v2.52.1.1
+=========
+ * Updated JavaScript automation atoms.
+ * Added logging of found dialog window handle for file upload dialog.
+
+v2.52.1.0
+=========
+ * Updated JavaScript automation atoms, including update to wgxpath library.
+ * Updated IE driver to return NoSuchElement on JavaScript atom errors.
+   Hitting a JavaScript error with the atom is an unrecoverable error. The
+   most common case of this for IE is when there is a page refresh,
+   navigation, or similar, and the driver is polling for element presence.
+   The calling code can't do anything about it, so we might as well just log
+   and return "no such element" error code. In the common case, this means
+   that the error will be transitory, and will sort itself out once the DOM
+   returns to normal after the page transition is completed. Note carefully
+   that this is an extreme hack, and has the potential to be masking a very
+   serious problem in the driver.
+ * Bumped IE default file upload dialog timoeut to 3000ms.
+ 
+v2.52.0.1
+=========
+ * Removing IE driver support for ie.validateCookieDocumentType capability.
+   This capability was made obsolete with the rewrite of the IE driver's
+   cookie handling in 2.47. It has been ignored since, so this commit removes
+   the IE driver code for that capability.
+ * Make IE driver directly return capabilities from new session command.
+   Previously, the driver would return a redirect HTTP response (303), and
+   the language bindings were expected to follow the redirect to get the
+   returned capabilities. This has been an obsolete pattern for some time,
+   and the IE driver is only now conforming to the proper pattern of simply
+   returning a 200 response with the correct capabilities as part of the
+   body.
+ * Updating logic for uploading files in IE. Updating the IE driver's handling
+   of sendKeys to have extra logging around finding the file open dialog. Also
+   rearranged the search for the dialog to more properly find the dialog using
+   the most common method first.
+
 v2.52.0.0
 =========
  * Release to synchronize with release of Selenium project.

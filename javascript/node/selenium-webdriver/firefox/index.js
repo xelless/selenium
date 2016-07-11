@@ -17,6 +17,9 @@
 
 /**
  * @fileoverview Defines the {@linkplain Driver WebDriver} client for Firefox.
+ * Before using this module, you must download the latest
+ * [geckodriver release] and ensure it can be found on your system [PATH].
+ *
  * Each FirefoxDriver instance will be created with an anonymous profile,
  * ensuring browser historys do not share session data (cookies, history, cache,
  * offline storage, etc.)
@@ -90,6 +93,20 @@
  *         .usingServer('http://127.0.0.1:4444/wd/hub')
  *         .setFirefoxOptions(options)
  *         .build();
+ *
+ * __Testing Older Versions of Firefox__
+ *
+ * To test versions of Firefox prior to Firefox 47, you must disable the use of
+ * the geckodriver using the {@link Options} class.
+ *
+ *     var options = new firefox.Options().useGeckoDriver(false);
+ *     var driver = new firefox.Driver(options);
+ *
+ * Alternatively, you may disable the geckodriver at runtime by setting the
+ * environment variable `SELENIUM_MARIONETTE=false`.
+ *
+ * [geckodriver release]: https://github.com/mozilla/geckodriver/releases/
+ * [PATH]: http://en.wikipedia.org/wiki/PATH_%28variable%29
  */
 
 'use strict';
@@ -100,21 +117,53 @@ const Binary = require('./binary').Binary,
     Profile = require('./profile').Profile,
     decodeProfile = require('./profile').decode,
     executors = require('../executors'),
+    http = require('../http'),
     httpUtil = require('../http/util'),
     io = require('../io'),
     capabilities = require('../lib/capabilities'),
+    command = require('../lib/command'),
     logging = require('../lib/logging'),
     promise = require('../lib/promise'),
     webdriver = require('../lib/webdriver'),
     net = require('../net'),
-    portprober = require('../net/portprober');
+    portprober = require('../net/portprober'),
+    remote = require('../remote');
+
+
+/**
+ * Firefox-specific capability keys. Users should use the {@linkplain Options}
+ * class instead of referencing these keys directly. _These keys are considered
+ * implementation details and may be removed or changed at any time._
+ *
+ * @enum {string}
+ */
+const Capability = {
+  /**
+   * Defines the Firefox binary to use. May be set to either a
+   * {@linkplain Binary} instance, or a string path to the Firefox executable.
+   */
+  BINARY: 'firefox_binary',
+
+  /**
+   * Specifies whether to use Mozilla's Marionette, or the legacy FirefoxDriver
+   * from the Selenium project. Defaults to false.
+   */
+  MARIONETTE: 'marionette',
+
+  /**
+   * Defines the Firefox profile to use. May be set to either a
+   * {@linkplain Profile} instance, or to a base-64 encoded zip of a profile
+   * directory.
+   */
+  PROFILE: 'firefox_profile'
+};
 
 
 /**
  * Configuration options for the FirefoxDriver.
  */
 class Options {
-    constructor() {
+  constructor() {
     /** @private {Profile} */
     this.profile_ = null;
 
@@ -126,6 +175,9 @@ class Options {
 
     /** @private {?capabilities.ProxyConfig} */
     this.proxy_ = null;
+
+    /** @private {boolean} */
+    this.marionette_ = true;
   }
 
   /**
@@ -181,6 +233,18 @@ class Options {
   }
 
   /**
+   * Sets whether to use Mozilla's geckodriver to drive the browser. This option
+   * is enabled by default and required for Firefox 47+.
+   *
+   * @param {boolean} enable Whether to enable the geckodriver.
+   * @see https://github.com/mozilla/geckodriver
+   */
+  useGeckoDriver(enable) {
+    this.marionette_ = enable;
+    return this;
+  }
+
+  /**
    * Converts these options to a {@link capabilities.Capabilities} instance.
    *
    * @return {!capabilities.Capabilities} A new capabilities object.
@@ -194,15 +258,161 @@ class Options {
       caps.set(capabilities.Capability.PROXY, this.proxy_);
     }
     if (this.binary_) {
-      caps.set('firefox_binary', this.binary_);
+      caps.set(Capability.BINARY, this.binary_);
     }
     if (this.profile_) {
-      caps.set('firefox_profile', this.profile_);
+      caps.set(Capability.PROFILE, this.profile_);
     }
+    caps.set(Capability.MARIONETTE, this.marionette_);
     return caps;
   }
 }
 
+
+/**
+ * Enum of available command contexts.
+ *
+ * Command contexts are specific to Marionette, and may be used with the
+ * {@link #context=} method. Contexts allow you to direct all subsequent
+ * commands to either "content" (default) or "chrome". The latter gives
+ * you elevated security permissions.
+ *
+ * @enum {string}
+ */
+const Context = {
+  CONTENT: "content",
+  CHROME: "chrome",
+};
+
+
+const GECKO_DRIVER_EXE =
+    process.platform === 'win32' ? 'geckodriver.exe' : 'geckodriver';
+
+
+/**
+ * @return {string} .
+ * @throws {Error}
+ */
+function findGeckoDriver() {
+  let exe = io.findInPath(GECKO_DRIVER_EXE, true);
+  if (!exe) {
+    throw Error(
+      'The ' + GECKO_DRIVER_EXE + ' executable could not be found on the current ' +
+      'PATH. Please download the latest version from ' +
+      'https://github.com/mozilla/geckodriver/releases/' +
+      'WebDriver and ensure it can be found on your PATH.');
+  }
+  return exe;
+}
+
+
+/**
+ * @param {(string|!Binary)} binary .
+ * @return {!remote.DriverService} .
+ */
+function createGeckoDriverService(binary) {
+  let exe = typeof binary === 'string' ?
+    Promise.resolve(binary) : binary.locate();
+
+  let geckoDriver = findGeckoDriver();
+  let port =  portprober.findFreePort();
+  let marionettePort = portprober.findFreePort();
+  return new remote.DriverService(geckoDriver, {
+    loopback: true,
+    port: port,
+    args: Promise.all([exe, port, marionettePort]).then(args => {
+      return ['-b', args[0], 
+              '--webdriver-port', args[1],
+              '--marionette-port', args[2]];
+    })
+    // ,stdio: 'inherit'
+  });
+}
+
+
+/**
+ * @param {(Profile|string)} profile The profile to prepare.
+ * @param {number} port The port the FirefoxDriver should listen on.
+ * @return {!Promise<string>} a promise for the path to the profile directory.
+ */
+function prepareProfile(profile, port) {
+  if (typeof profile === 'string') {
+    return decodeProfile(/** @type {string} */(profile)).then(dir => {
+      profile = new Profile(dir);
+      profile.setPreference('webdriver_firefox_port', port);
+      return profile.writeToDisk();
+    });
+  }
+
+  profile = profile || new Profile;
+  profile.setPreference('webdriver_firefox_port', port);
+  return profile.writeToDisk();
+}
+
+
+function normalizeProxyConfiguration(config) {
+  if ('manual' === config.proxyType) {
+    if (config.ftpProxy && !config.ftpProxyPort) {
+      let hostAndPort = net.splitHostAndPort(config.ftpProxy);
+      config.ftpProxy = hostAndPort.host;
+      config.ftpProxyPort = hostAndPort.port;
+    }
+
+    if (config.httpProxy && !config.httpProxyPort) {
+      let hostAndPort = net.splitHostAndPort(config.httpProxy);
+      config.httpProxy = hostAndPort.host;
+      config.httpProxyPort = hostAndPort.port;
+    }
+
+    if (config.sslProxy && !config.sslProxyPort) {
+      let hostAndPort = net.splitHostAndPort(config.sslProxy);
+      config.sslProxy = hostAndPort.host;
+      config.sslProxyPort = hostAndPort.port;
+    }
+
+    if (config.socksProxy && !config.socksProxyPort) {
+      let hostAndPort = net.splitHostAndPort(config.socksProxy);
+      config.socksProxy = hostAndPort.host;
+      config.socksProxyPort = hostAndPort.port;
+    }
+  } else if ('pac' === config.proxyType) {
+    if (config.proxyAutoconfigUrl && !config.pacUrl) {
+      config.pacUrl = config.proxyAutoconfigUrl;
+    }
+  }
+  return config;
+}
+
+
+/** @enum {string} */
+const ExtensionCommand = {
+  GET_CONTEXT: 'getContext',
+  SET_CONTEXT: 'setContext',
+};
+
+
+/**
+ * Creates a command executor with support for Marionette's custom commands.
+ * @param {!Promise<string>} url The server's URL.
+ * @param {!command.Executor} The new command executor.
+ */
+function createExecutor(url) {
+  return new command.DeferredExecutor(url.then(url => {
+    let client = new http.HttpClient(url);
+    let executor = new http.Executor(client);
+
+    executor.defineCommand(
+        ExtensionCommand.GET_CONTEXT,
+        'GET',
+        '/session/:sessionId/moz/context');
+    executor.defineCommand(
+        ExtensionCommand.SET_CONTEXT,
+        'POST',
+        '/session/:sessionId/moz/context');
+
+    return executor;
+  }));
+}
 
 /**
  * A WebDriver client for Firefox.
@@ -224,60 +434,88 @@ class Driver extends webdriver.WebDriver {
       caps = new capabilities.Capabilities(opt_config);
     }
 
-    let binary = caps.get('firefox_binary') || new Binary();
+    let binary = caps.get(Capability.BINARY) || new Binary();
+    caps.delete(Capability.BINARY);
     if (typeof binary === 'string') {
       binary = new Binary(binary);
     }
 
-    let profile = caps.get('firefox_profile') || new Profile();
+    let profile;
+    if (caps.has(Capability.PROFILE)) {
+      profile = caps.get(Capability.PROFILE);
+      caps.delete(Capability.PROFILE);
+    }
 
-    caps.set('firefox_binary', null);
-    caps.set('firefox_profile', null);
+    let serverUrl, onQuit;
 
-    let self;  // Cannot assign to 'this' until after we call super.
-    let freePort = portprober.findFreePort();
-    let command = freePort.then(function(port) {
-      if (typeof profile === 'string') {
-        return decodeProfile(profile).then(function(dir) {
-          var profile = new Profile(dir);
-          profile.setPreference('webdriver_firefox_port', port);
-          return profile.writeToDisk();
-        });
-      } else {
-        profile.setPreference('webdriver_firefox_port', port);
-        return profile.writeToDisk();
+    // Users must now explicitly disable marionette to use the legacy
+    // FirefoxDriver.
+    let noMarionette =
+        caps.get(Capability.MARIONETTE) === false
+            || /^0|false$/i.test(process.env['SELENIUM_MARIONETTE']);
+    let useMarionette = !noMarionette;
+
+    if (useMarionette) {
+      let service = createGeckoDriverService(binary);
+      serverUrl = service.start();
+      onQuit = () => service.kill();
+
+      if (profile) {
+        caps.set(Capability.PROFILE, profile.encode());
       }
-    }).then(function(profileDir) {
-      self.profilePath_ = profileDir;
-      return binary.launch(profileDir);
-    });
 
-    let serverUrl = command
-        .then(function() { return freePort; })
-        .then(function(/** number */port) {
-          var serverUrl = url.format({
-            protocol: 'http',
-            hostname: net.getLoopbackAddress(),
-            port: port + '',
-            pathname: '/hub'
+      if (caps.has(capabilities.Capability.PROXY)) {
+        let proxy = normalizeProxyConfiguration(
+            caps.get(capabilities.Capability.PROXY));
+
+        // Marionette requires proxy settings to be specified as required
+        // capabilities. See mozilla/geckodriver#97
+        let required = new capabilities.Capabilities()
+            .set(capabilities.Capability.PROXY, proxy);
+
+        caps.delete(capabilities.Capability.PROXY);
+        caps = {required, desired: caps};
+      }
+    } else {
+      profile = profile || new Profile;
+
+      let freePort = portprober.findFreePort();
+      let preparedProfile =
+          freePort.then(port => prepareProfile(profile, port));
+      let command = preparedProfile.then(dir => binary.launch(dir));
+
+      serverUrl = command.then(() => freePort)
+          .then(function(/** number */port) {
+            let serverUrl = url.format({
+              protocol: 'http',
+              hostname: net.getLoopbackAddress(),
+              port: port + '',
+              pathname: '/hub'
+            });
+            let ready = httpUtil.waitForServer(serverUrl, 45 * 1000);
+            return ready.then(() => serverUrl);
           });
 
-          return httpUtil.waitForServer(serverUrl, 45 * 1000).then(function() {
-            return serverUrl;
-          });
+      onQuit = function() {
+        return command.then(command => {
+          command.kill();
+          return preparedProfile.then(io.rmDir)
+              .then(() => command.result(),
+                    () => command.result());
         });
+      };
+    }
 
-    var executor = executors.createExecutor(serverUrl);
-    var driver = webdriver.WebDriver.createSession(executor, caps, opt_flow);
+    let executor = createExecutor(serverUrl);
+    let driver = webdriver.WebDriver.createSession(executor, caps, opt_flow);
+    super(driver.getSession(), executor, driver.controlFlow());
 
-    super(driver.getSession(), executor, opt_flow);
-    self = this;
+    let boundQuit = this.quit.bind(this);
 
-    /** @private {?string} */
-    this.profilePath_ = null;
-
-    /** @private */
-    this.command_ = command;
+    /** @override */
+    this.quit = function() {
+      return boundQuit().finally(onQuit);
+    };
   }
 
   /**
@@ -288,25 +526,36 @@ class Driver extends webdriver.WebDriver {
   setFileDetector() {
   }
 
-  /** @override */
-  quit() {
-    // TODO: use super.quit when closure compiler knows how to transpile it.
-    // let superQuit = super.quit;
-    return this.call(function() {
-      let self = this;
-      return webdriver.WebDriver.prototype.quit.call(this)
-          .thenFinally(function() {
-            return self.command_.then(function(command) {
-              command.kill();
-              return command.result();
-            });
-          })
-          .thenFinally(function() {
-            if (self.profilePath_) {
-              return io.rmDir(self.profilePath_);
-            }
-          });
-    }, this);
+  /**
+   * Get the context that is currently in effect.
+   *
+   * @return {!promise.Promise<Context>} Current context.
+   */
+  getContext() {
+    return this.schedule(
+        new command.Command(ExtensionCommand.GET_CONTEXT),
+        'get WebDriver.context');
+  }
+
+  /**
+   * Changes target context for commands between chrome- and content.
+   *
+   * Changing the current context has a stateful impact on all subsequent
+   * commands. The {@link Context.CONTENT} context has normal web
+   * platform document permissions, as if you would evaluate arbitrary
+   * JavaScript. The {@link Context.CHROME} context gets elevated
+   * permissions that lets you manipulate the browser chrome itself,
+   * with full access to the XUL toolkit.
+   *
+   * Use your powers wisely.
+   *
+   * @param {!promise.Promise<void>} ctx The context to switch to.
+   */
+  setContext(ctx) {
+    return this.schedule(
+        new command.Command(ExtensionCommand.SET_CONTEXT)
+            .setParameter("context", ctx),
+        'set WebDriver.context');
   }
 }
 
@@ -315,6 +564,7 @@ class Driver extends webdriver.WebDriver {
 
 
 exports.Binary = Binary;
+exports.Context = Context;
 exports.Driver = Driver;
 exports.Options = Options;
 exports.Profile = Profile;

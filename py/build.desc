@@ -10,7 +10,7 @@
 
 py_test(
   name = "firefox_test",
-  ff_specific_tests = [ "test/selenium/webdriver/firefox/*_tests.py" ],
+  ff_specific_tests = [ "test/selenium/webdriver/firefox/ff_*_tests.py" ],
   deps = [ ":test_ff" ],
   resources = [
     { "//javascript/firefox-driver:webdriver_prefs" : "selenium/webdriver/firefox/webdriver_prefs.json" },
@@ -20,7 +20,8 @@ py_test(
 
 py_test(
   name = "marionette_test",
-  deps = [ ":test_ff" ],
+  marionette_specific_tests = [ "test/selenium/webdriver/firefox/mn_*_tests.py" ],
+  deps = [ ":test_marionette" ],
   browsers = [ "marionette" ])
 
 py_test(
@@ -97,7 +98,7 @@ py_docs(
 py_env(
   name = "test_env_docs",
   packages = [
-    "third_party/py/py-1.4.26.tar.gz",
+    "third_party/py/py-1.4.31-py2.py3-none-any.whl",
     "third_party/py/docutils-0.11.tar.gz",
     "third_party/py/Jinja2-2.7.tar.gz",
     "third_party/py/MarkupSafe-0.18.tar.gz",

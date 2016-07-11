@@ -29,8 +29,8 @@ namespace OpenQA.Selenium.Firefox
     /// </summary>
     public sealed class FirefoxDriverService : DriverService
     {
-        private const string FirefoxDriverServiceFileName = "wires.exe";
-        private static readonly Uri FirefoxDriverDownloadUrl = new Uri("https://github.com/jgraham/wires/releases");
+        private const string FirefoxDriverServiceFileName = "geckodriver.exe";
+        private static readonly Uri FirefoxDriverDownloadUrl = new Uri("https://github.com/mozilla/geckodriver/releases");
         private string browserBinaryPath = @"C:\Program Files (x86)\Nightly\firefox.exe";
         private int browserCommunicationPort = -1;
 
@@ -187,7 +187,7 @@ namespace OpenQA.Selenium.Firefox
         }
 
         /// <summary>
-        /// Creates a default instance of the FirefoxDriverService using a specified path to the ChromeDriver executable with the given name.
+        /// Creates a default instance of the FirefoxDriverService using a specified path to the Firefox driver executable with the given name.
         /// </summary>
         /// <param name="driverPath">The directory containing the Firefox driver executable.</param>
         /// <param name="driverExecutableFileName">The name of th  Firefox driver executable file.</param>

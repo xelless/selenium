@@ -244,7 +244,7 @@ public class FluentWait<T> implements Wait<T> {
           return value;
         }
       } catch (Throwable e) {
-        lastException = propagateIfNotIngored(e);
+        lastException = propagateIfNotIgnored(e);
       }
 
       // Check the timeout after evaluating the function to ensure conditions
@@ -253,11 +253,10 @@ public class FluentWait<T> implements Wait<T> {
         String message = messageSupplier != null ?
             messageSupplier.get() : null;
 
-        String toAppend = message == null ?
-            " waiting for " + isTrue.toString() : ": " + message;
-
-        String timeoutMessage = String.format("Timed out after %d seconds%s",
-            timeout.in(SECONDS), toAppend);
+        String timeoutMessage = String.format(
+            "Expected condition failed: %s (tried for %d second(s) with %s interval)",
+            message == null ? "waiting for " + isTrue : message,
+            timeout.in(SECONDS), interval);
         throw timeoutException(timeoutMessage, lastException);
       }
 
@@ -270,7 +269,7 @@ public class FluentWait<T> implements Wait<T> {
     }
   }
 
-  private Throwable propagateIfNotIngored(Throwable e) {
+  private Throwable propagateIfNotIgnored(Throwable e) {
     for (Class<? extends Throwable> ignoredException : ignoredExceptions) {
       if (ignoredException.isInstance(e)) {
         return e;

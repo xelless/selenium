@@ -51,6 +51,14 @@ public abstract class AbstractWebDriverEventListener implements WebDriverEventLi
     // Do nothing.
   }
 
+  public void beforeNavigateRefresh(WebDriver driver) {
+    // Do nothing.
+  }
+
+  public void afterNavigateRefresh(WebDriver driver) {
+    // Do nothing.
+  }
+
   public void beforeFindBy(By by, WebElement element, WebDriver driver) {
     // Do nothing.
   }
@@ -67,11 +75,11 @@ public abstract class AbstractWebDriverEventListener implements WebDriverEventLi
     // Do nothing.
   }
 
-  public void beforeChangeValueOf(WebElement element, WebDriver driver) {
+  public void beforeChangeValueOf(WebElement element, WebDriver driver, CharSequence[] keysToSend) {
     // Do nothing.
   }
 
-  public void afterChangeValueOf(WebElement element, WebDriver driver) {
+  public void afterChangeValueOf(WebElement element, WebDriver driver, CharSequence[] keysToSend) {
     // Do nothing.
   }
 
